@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
@@ -36,7 +36,7 @@ The RAG index is pre-created and loaded from the repository.
 """)
 
 # Check for index
-if not os.path.exists("faiss_index"):
+if not os.path.exists("chroma_index"):
     st.error("""
     Index not found. Please create the index first by running the create_index.py script.
     
@@ -50,15 +50,14 @@ if not os.path.exists("faiss_index"):
 
 # Initialize the conversation chain
 def initialize_chain():
-    # Load the FAISS index
+    # Load the Chroma index
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': 'cpu'}
     )
-    vectorstore = FAISS.load_local(
-        "faiss_index",
-        embeddings,
-        allow_dangerous_deserialization=True
+    vectorstore = Chroma(
+        persist_directory="chroma_index",
+        embedding_function=embeddings
     )
     
     # Initialize the language model

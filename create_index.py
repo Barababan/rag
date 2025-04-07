@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 
 # Load environment variables
 load_dotenv()
@@ -55,21 +55,22 @@ def create_index():
     chunks = text_splitter.split_documents(documents)
     print(f"Создано {len(chunks)} чанков из {len(documents)} страниц")
 
-    # Create embeddings and store in FAISS
-    print("\nCreating embeddings and storing in FAISS...")
+    # Create embeddings and store in Chroma
+    print("\nCreating embeddings and storing in Chroma...")
     try:
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
         )
         
-        vectorstore = FAISS.from_documents(
+        vectorstore = Chroma.from_documents(
             documents=chunks,
-            embedding=embeddings
+            embedding=embeddings,
+            persist_directory="chroma_index"
         )
         
         # Save the index
-        vectorstore.save_local("faiss_index")
+        vectorstore.persist()
         print("\nIndex created and saved successfully!")
         print("You can now run the Streamlit app using: streamlit run app.py")
     except Exception as e:
