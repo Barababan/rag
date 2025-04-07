@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import torch
 from pathlib import Path
 import logging
+from langchain.docstore.document import Document
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -41,6 +42,9 @@ templates_dir.mkdir(exist_ok=True)
 
 static_dir = Path("./static")
 static_dir.mkdir(exist_ok=True)
+
+chroma_dir = Path("./chroma_index")
+chroma_dir.mkdir(exist_ok=True)
 
 # Initialize FastAPI app
 app = FastAPI(title="RAG Chat Assistant")
@@ -84,24 +88,21 @@ except Exception as e:
 # Initialize the vector store
 try:
     logger.info("Initializing vector store...")
-    if not os.path.exists("chroma_index"):
-        logger.warning("Chroma index not found. Creating a new one...")
-        # Create a simple document for initial index
-        from langchain.docstore.document import Document
-        docs = [Document(page_content="This is a placeholder document for the initial index.")]
-        vectorstore = Chroma.from_documents(
-            documents=docs,
-            embedding=embeddings,
-            persist_directory="chroma_index"
+    # Create a basic document for initial index
+    docs = [
+        Document(
+            page_content="This is a placeholder document. You can add your own documents later.",
+            metadata={"source": "placeholder"}
         )
-        vectorstore.persist()
-        logger.info("Created new Chroma index")
-    else:
-        vectorstore = Chroma(
-            persist_directory="chroma_index",
-            embedding_function=embeddings
-        )
-        logger.info("Loaded existing Chroma index")
+    ]
+    
+    vectorstore = Chroma.from_documents(
+        documents=docs,
+        embedding=embeddings,
+        persist_directory="chroma_index"
+    )
+    vectorstore.persist()
+    logger.info("Created new Chroma index with placeholder document")
     
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     logger.info("Vector store initialized successfully")
