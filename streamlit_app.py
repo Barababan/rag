@@ -48,7 +48,7 @@ The RAG index is pre-created and loaded from the repository.
 # Check for index
 if not os.path.exists("chroma_index"):
     st.error("""
-    Index not found. Please create the index first by running the create_index.py script.
+    Chroma index not found. Please create the index first by running the create_index.py script.
     
     Instructions:
     1. Create a 'pdfs' directory if it doesn't exist
