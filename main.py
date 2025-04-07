@@ -29,6 +29,9 @@ if not os.getenv("HUGGINGFACE_API_KEY"):
     logger.error("HUGGINGFACE_API_KEY environment variable is not set")
     raise ValueError("Please set the HUGGINGFACE_API_KEY environment variable")
 
+# Set Hugging Face API token as environment variable
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGFACE_API_KEY")
+
 # Create necessary directories
 cache_dir = Path("./model_cache")
 cache_dir.mkdir(exist_ok=True)
@@ -71,7 +74,6 @@ try:
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={'device': device},
         encode_kwargs={'normalize_embeddings': True},
-        huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),
         cache_folder=str(cache_dir)
     )
     logger.info("Embeddings initialized successfully")
