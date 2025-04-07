@@ -56,7 +56,7 @@ def get_embeddings():
         return HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'},
-            cache_folder="./model_cache"
+            encode_kwargs={'normalize_embeddings': True}
         )
     except Exception as e:
         st.error(f"Error initializing model: {str(e)}")
@@ -76,51 +76,52 @@ def get_vectorstore(embeddings):
 
 # Initialize the conversation chain
 try:
-    embeddings = get_embeddings()
-    if embeddings is None:
-        st.stop()
-    
-    vectorstore = get_vectorstore(embeddings)
-    if vectorstore is None:
-        st.stop()
-    
-    # Initialize the language model
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
-        temperature=0.7
-    )
-    
-    # Initialize memory
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True
-    )
-    
-    # Create the conversation chain
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3}
-        ),
-        memory=memory,
-        verbose=True
-    )
-    
-    st.session_state.conversation = conversation_chain
-    st.success("Successfully loaded the RAG index!")
-    
+    with st.spinner("Загрузка модели..."):
+        embeddings = get_embeddings()
+        if embeddings is None:
+            st.stop()
+        
+        vectorstore = get_vectorstore(embeddings)
+        if vectorstore is None:
+            st.stop()
+        
+        # Initialize the language model
+        llm = ChatOpenAI(
+            model_name="gpt-3.5-turbo",
+            temperature=0.7
+        )
+        
+        # Initialize memory
+        memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True
+        )
+        
+        # Create the conversation chain
+        conversation_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 3}
+            ),
+            memory=memory,
+            verbose=True
+        )
+        
+        st.session_state.conversation = conversation_chain
+        st.success("Модель успешно загружена!")
+        
 except Exception as e:
-    st.error(f"Error initializing: {str(e)}")
+    st.error(f"Ошибка при инициализации: {str(e)}")
     st.stop()
 
 # Chat interface
 if st.session_state.conversation is not None:
     # Chat input
-    user_question = st.text_input("Ask a question about physiotherapy:")
+    user_question = st.text_input("Задайте ваш вопрос о физиотерапии:")
     
     if user_question:
-        with st.spinner("Searching for answer..."):
+        with st.spinner("Ищу ответ..."):
             try:
                 # Get the response
                 response = st.session_state.conversation({"question": user_question})
@@ -133,14 +134,21 @@ if st.session_state.conversation is not None:
                         st.write(f"🤖 Assistant: {message}")
                 
                 # Add the new messages to chat history
-                st.session_state.chat_history.append(user_question)
-                st.session_state.chat_history.append(response["answer"])
+                st.session_state.chat_history.append((user_question, response["answer"]))
                 
                 # Display the latest response
                 st.write(f"👤 You: {user_question}")
                 st.write(f"🤖 Assistant: {response['answer']}")
             except Exception as e:
-                st.error(f"Error getting response: {str(e)}")
+                st.error(f"Произошла ошибка при обработке вопроса: {str(e)}")
+
+# Отображение истории чата
+if st.session_state.chat_history:
+    st.subheader("История разговора")
+    for question, answer in st.session_state.chat_history:
+        st.write(f"Вопрос: {question}")
+        st.write(f"Ответ: {answer}")
+        st.write("---")
 
 # FAQ Section
 st.sidebar.header("Frequently Asked Questions")
