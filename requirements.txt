@@ -11,4 +11,4 @@ sentence-transformers>=2.6.0
 chromadb==0.4.22
 transformers==4.36.2
 torch==2.2.0
-tokenizers==0.15.0 
+tokenizers>=0.19.1 
