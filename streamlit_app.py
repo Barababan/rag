@@ -8,9 +8,28 @@ from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 import torch
 from pathlib import Path
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import logging
+from typing import Dict, Any
+import asyncio
+import threading
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Telegram Bot Token
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Store active conversations
+active_conversations: Dict[str, Any] = {}
 
 # Check for required environment variables
 if not os.getenv("OPENAI_API_KEY"):
@@ -162,4 +181,81 @@ st.sidebar.markdown("### About")
 st.sidebar.markdown("""
 This application uses RAG (Retrieval-Augmented Generation) to provide accurate answers based on physiotherapy documentation.
 The index is pre-created and updated periodically.
-""") 
+""")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a message when the command /start is issued."""
+    user = update.effective_user
+    await update.message.reply_text(
+        f'Hi {user.first_name}! I am your AI assistant. How can I help you today?'
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a message when the command /help is issued."""
+    help_text = """
+Available commands:
+/start - Start the bot
+/help - Show this help message
+    """
+    await update.message.reply_text(help_text)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle incoming messages."""
+    user_message = update.message.text
+    user_id = update.effective_user.id
+    
+    # Here you can add your AI processing logic
+    response = f"Echo: {user_message}"  # Replace with actual AI processing
+    
+    await update.message.reply_text(response)
+
+def run_bot():
+    """Run the bot in a separate thread."""
+    async def main():
+        if not TELEGRAM_TOKEN:
+            logger.error("No TELEGRAM_BOT_TOKEN found in environment variables")
+            return
+
+        # Initialize bot application
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+        # Add handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+        # Start the bot
+        await application.initialize()
+        await application.start()
+        await application.run_polling()
+
+    asyncio.run(main())
+
+# Start the bot in a separate thread
+bot_thread = threading.Thread(target=run_bot, daemon=True)
+bot_thread.start()
+
+# Streamlit UI
+st.title("Telegram Bot Dashboard")
+
+if not TELEGRAM_TOKEN:
+    st.error("Please set TELEGRAM_BOT_TOKEN in your environment variables")
+else:
+    st.success("Bot is running! You can interact with it on Telegram.")
+    
+    st.markdown("""
+    ### Available Commands
+    - `/start` - Start the bot
+    - `/help` - Show help message
+    
+    ### Status
+    The bot is currently running and ready to receive messages.
+    """)
+    
+    # Display active conversations
+    st.subheader("Active Conversations")
+    if active_conversations:
+        for user_id, data in active_conversations.items():
+            st.write(f"User ID: {user_id}")
+    else:
+        st.info("No active conversations yet") 
