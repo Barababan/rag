@@ -8,36 +8,36 @@ from langchain_community.vectorstores import Chroma
 # Load environment variables
 load_dotenv()
 
+# Check for required environment variables
+if not os.getenv("HUGGINGFACE_API_KEY"):
+    print("Error: HUGGINGFACE_API_KEY not found in environment variables.")
+    exit(1)
+
 def create_index():
     """
     Create RAG index from PDF documents in the specified directory
     """
     print("Starting RAG index creation...")
     
-    # Check if OpenAI API key is set
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not found in environment variables")
-        print("Please create a .env file with your OpenAI API key")
-        return
-    
     # Create directory if it doesn't exist
     if not os.path.exists("pdfs"):
         os.makedirs("pdfs")
-        print("Создана директория 'pdfs'. Пожалуйста, добавьте PDF файлы и запустите скрипт снова.")
+        print("Created 'pdfs' directory. Please add your PDF files there.")
         return
 
     # Check if there are PDF files in the directory
     pdf_files = [f for f in os.listdir("pdfs") if f.endswith(".pdf")]
     if not pdf_files:
-        print("В директории 'pdfs' нет PDF файлов. Пожалуйста, добавьте файлы и запустите скрипт снова.")
+        print("No PDF files found in the 'pdfs' directory.")
         return
 
     # Load and process PDFs
     documents = []
     for pdf_file in pdf_files:
+        print(f"Processing {pdf_file}...")
         loader = PyPDFLoader(os.path.join("pdfs", pdf_file))
         documents.extend(loader.load())
-        print(f"Обработан файл: {pdf_file}")
+        print(f"Loaded {len(documents)} pages from {pdf_file}")
 
     if not documents:
         print("No documents were successfully loaded")
@@ -53,30 +53,25 @@ def create_index():
         length_function=len,
     )
     chunks = text_splitter.split_documents(documents)
-    print(f"Создано {len(chunks)} чанков из {len(documents)} страниц")
+    print(f"Created {len(chunks)} chunks from the documents")
 
-    # Create embeddings and store in Chroma
-    print("\nCreating embeddings and storing in Chroma...")
-    try:
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'}
-        )
-        
-        vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            persist_directory="chroma_index"
-        )
-        
-        # Save the index
-        vectorstore.persist()
-        print("\nIndex created and saved successfully!")
-        print("You can now run the Streamlit app using: streamlit run app.py")
-    except Exception as e:
-        print(f"\nError creating embeddings: {str(e)}")
-        print("Please make sure all dependencies are installed correctly")
-        return
+    # Initialize embeddings with Hugging Face token
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True},
+        huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY")
+    )
+
+    # Create and persist the vector store
+    vectorstore = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        persist_directory="chroma_index"
+    )
+    vectorstore.persist()
+    print("Vector store created and persisted successfully!")
+    print("You can now run the Streamlit app using: streamlit run app.py")
 
 if __name__ == "__main__":
     create_index() 

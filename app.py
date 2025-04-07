@@ -1,13 +1,13 @@
 import streamlit as st
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
-from dotenv import load_dotenv
+from langchain.memory import ConversationBufferMemory
 import os
-from pdf_processor import PDFProcessor
-import tempfile
 
+# Load environment variables
 load_dotenv()
 
 # Initialize session state
@@ -15,102 +15,113 @@ if "conversation" not in st.session_state:
     st.session_state.conversation = None
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "pdf_processor" not in st.session_state:
-    st.session_state.pdf_processor = PDFProcessor()
 
-# FAQ data
-FAQ_DATA = {
-    "Что такое физиотерапия?": "Физиотерапия - это область медицины, которая использует физические методы лечения для восстановления, поддержания и улучшения физического состояния пациента.",
-    "Какие основные методы физиотерапии существуют?": "Основные методы включают электротерапию, магнитотерапию, ультразвуковую терапию, лазерную терапию, массаж и лечебную физкультуру.",
-    "В чем разница между детской и взрослой физиотерапией?": "Детская физиотерапия учитывает особенности развития детского организма, использует более щадящие методы и часто включает элементы игры в процесс лечения.",
-    "Как часто нужно посещать физиотерапевта?": "Частота посещений зависит от диагноза, состояния пациента и назначенного курса лечения. Обычно это 2-3 раза в неделю.",
-    "Есть ли противопоказания к физиотерапии?": "Да, противопоказания включают острые воспалительные процессы, онкологические заболевания, тяжелые сердечно-сосудистые заболевания и некоторые другие состояния."
-}
+# Page config
+st.set_page_config(
+    page_title="Physiotherapy Assistant",
+    page_icon="🏥",
+    layout="wide"
+)
 
+# Title and description
+st.title("Physiotherapy Assistant")
+st.markdown("""
+This assistant can help answer questions about physiotherapy based on the provided documentation.
+Please make sure you have created the RAG index using create_index.py first.
+""")
+
+# Initialize the conversation chain
 def initialize_chain():
+    # Check if the index exists
+    if not os.path.exists("faiss_index"):
+        raise FileNotFoundError("FAISS index not found. Please run create_index.py first.")
+        
+    # Load the FAISS index
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    vectorstore = FAISS.load_local(
+        "faiss_index", 
+        embeddings,
+        allow_dangerous_deserialization=True
     )
     
-    if os.path.exists("faiss_index"):
-        vectorstore = FAISS.load_local("faiss_index", embeddings)
-        llm = ChatOpenAI(temperature=0.7)
-        chain = ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=vectorstore.as_retriever(),
-            return_source_documents=True
-        )
-        return chain
-    return None
+    # Initialize the language model
+    llm = ChatOpenAI(
+        temperature=0,
+        model_name="gpt-3.5-turbo-16k",
+        streaming=True
+    )
+    
+    # Initialize memory
+    memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        return_messages=True
+    )
+    
+    # Create the conversation chain
+    conversation_chain = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=vectorstore.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 3}
+        ),
+        memory=memory,
+        verbose=True
+    )
+    
+    return conversation_chain
 
-def main():
-    st.title("Ассистент по физиотерапии")
-    
-    # Sidebar with FAQ and PDF upload
-    with st.sidebar:
-        st.header("Часто задаваемые вопросы")
-        for question, answer in FAQ_DATA.items():
-            with st.expander(question):
-                st.write(answer)
-        st.header("Загрузка PDF")
-        pdf_files = st.file_uploader(
-            "Загрузите PDF файлы", type=["pdf"], accept_multiple_files=True
-        )
-        if st.button("Обработать PDF"):
-            if pdf_files:
-                with st.spinner("Обработка PDF..."):
-                    # Create a temporary directory to store uploaded PDFs
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        # Save uploaded files to temporary directory
-                        for pdf_file in pdf_files:
-                            file_path = os.path.join(temp_dir, pdf_file.name)
-                            with open(file_path, "wb") as f:
-                                f.write(pdf_file.getvalue())
-                        
-                        # Process PDFs using the PDFProcessor
-                        processor = PDFProcessor(pdf_dir=temp_dir)
-                        vectorstore = processor.process_pdfs()
-                        
-                        if vectorstore:
-                            # Initialize the conversation chain with the new vectorstore
-                            llm = ChatOpenAI(temperature=0.7)
-                            st.session_state.conversation = ConversationalRetrievalChain.from_llm(
-                                llm=llm,
-                                retriever=vectorstore.as_retriever(),
-                                return_source_documents=True
-                            )
-                            st.success("PDF файлы успешно обработаны! Теперь вы можете задавать вопросы.")
-                        else:
-                            st.error("Произошла ошибка при обработке PDF файлов.")
-            else:
-                st.warning("Пожалуйста, загрузите PDF файлы.")
-    
-    # Main chat interface
-    st.header("Задайте вопрос")
-    
-    # Initialize the conversation chain
-    if st.session_state.conversation is None:
+# Initialize the chain if not already done
+if st.session_state.conversation is None:
+    try:
         st.session_state.conversation = initialize_chain()
-    
+        st.success("Successfully loaded the RAG index!")
+    except FileNotFoundError as e:
+        st.error(str(e))
+        st.info("Please follow these steps:\n1. Create a 'pdfs' directory\n2. Add your PDF files to the 'pdfs' directory\n3. Run 'python create_index.py' to create the index\n4. Refresh this page")
+    except Exception as e:
+        st.error(f"Error initializing the conversation chain: {str(e)}")
+        st.info("Please check your OpenAI API key and make sure all dependencies are installed correctly.")
+
+# Chat interface
+if st.session_state.conversation is not None:
     # Chat input
-    user_question = st.text_input("Ваш вопрос:")
+    user_question = st.text_input("Ask a question about physiotherapy:")
     
     if user_question:
-        if st.session_state.conversation:
-            response = st.session_state.conversation({
-                "question": user_question,
-                "chat_history": st.session_state.chat_history
-            })
+        try:
+            # Get the response
+            response = st.session_state.conversation({"question": user_question})
             
-            st.session_state.chat_history.append((user_question, response["answer"]))
+            # Display the chat history
+            for i, message in enumerate(st.session_state.chat_history):
+                if i % 2 == 0:
+                    st.write(f"👤 You: {message}")
+                else:
+                    st.write(f"🤖 Assistant: {message}")
             
-            # Display chat history
-            for question, answer in st.session_state.chat_history:
-                st.write(f"Q: {question}")
-                st.write(f"A: {answer}")
-                st.write("---")
-        else:
-            st.error("Пожалуйста, сначала добавьте PDF файлы и обработайте их.")
+            # Add the new messages to chat history
+            st.session_state.chat_history.append(user_question)
+            st.session_state.chat_history.append(response["answer"])
+            
+            # Display the latest response
+            st.write(f"👤 You: {user_question}")
+            st.write(f"🤖 Assistant: {response['answer']}")
+        except Exception as e:
+            st.error(f"Error getting response: {str(e)}")
 
-if __name__ == "__main__":
-    main()
+# FAQ Section
+st.sidebar.header("Frequently Asked Questions")
+faqs = {
+    "What is physiotherapy?": "Physiotherapy is a healthcare profession that focuses on improving physical function, mobility, and quality of life through physical interventions, exercise, and education.",
+    "How can physiotherapy help?": "Physiotherapy can help with pain management, injury recovery, improving mobility, preventing future injuries, and enhancing overall physical function.",
+    "What conditions can physiotherapy treat?": "Physiotherapy can treat various conditions including sports injuries, back pain, arthritis, stroke recovery, respiratory problems, and post-surgery rehabilitation.",
+    "How long does physiotherapy treatment take?": "The duration of physiotherapy treatment varies depending on the condition, severity, and individual progress. It can range from a few sessions to several months.",
+    "Is physiotherapy painful?": "Physiotherapy should not be painful, though some exercises or treatments might cause mild discomfort. Your physiotherapist will work within your comfort level."
+}
+
+for question, answer in faqs.items():
+    with st.sidebar.expander(question):
+        st.write(answer)
