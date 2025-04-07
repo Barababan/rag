@@ -66,12 +66,10 @@ llm = ChatOpenAI(
 )
 
 # Initialize embeddings with Hugging Face token
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGFACE_API_KEY")
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={'device': 'cpu'},
-    encode_kwargs={'normalize_embeddings': True},
-    cache_folder=str(cache_dir),
-    huggingfacehub_api_token=os.environ["HUGGINGFACE_API_KEY"]
+    cache_folder=str(cache_dir)
 )
 
 # Initialize the vector store
