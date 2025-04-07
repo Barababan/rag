@@ -7,6 +7,7 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 import torch
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -15,6 +16,10 @@ load_dotenv()
 if not os.getenv("OPENAI_API_KEY"):
     st.error("Error: OPENAI_API_KEY not found in environment variables.")
     st.stop()
+
+# Create model cache directory
+cache_dir = Path("./model_cache")
+cache_dir.mkdir(exist_ok=True)
 
 # Initialize session state
 if "conversation" not in st.session_state:
@@ -56,6 +61,7 @@ def get_embeddings():
         return HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'},
+            cache_folder=str(cache_dir),
             encode_kwargs={'normalize_embeddings': True}
         )
     except Exception as e:
