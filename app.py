@@ -67,8 +67,15 @@ llm = ChatOpenAI(
 
 # Initialize embeddings with Hugging Face token
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGFACE_API_KEY")
+
+# Set device
+device = "cuda" if torch.cuda.is_available() else "cpu"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={'device': device},
+    encode_kwargs={'normalize_embeddings': False},
     cache_folder=str(cache_dir)
 )
 
