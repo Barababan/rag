@@ -8,9 +8,13 @@ font = "sans serif"
 [server]
 enableCORS = false
 enableXsrfProtection = true
+headless = true
 
 [browser]
 gatherUsageStats = false
 
 [logger]
-level = "info" 
+level = "info"
+
+[runner]
+main = "streamlit_app.py" 
