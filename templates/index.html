@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+        }
+        .user-message {
+            background-color: #e9ecef;
+            margin-left: 20%;
+        }
+        .assistant-message {
+            background-color: #007bff;
+            color: white;
+            margin-right: 20%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">RAG Chat Assistant</h1>
+        <div class="chat-container" id="chatContainer"></div>
+        <form id="chatForm" class="d-flex">
+            <input type="text" id="userInput" class="form-control me-2" placeholder="Type your message..." required>
+            <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+
+        function addMessage(message, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+            messageDiv.textContent = message;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            addMessage(message, true);
+            userInput.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `message=${encodeURIComponent(message)}`
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, false);
+                } else {
+                    addMessage(data.response, false);
+                }
+            } catch (error) {
+                addMessage(`Error: ${error.message}`, false);
+            }
+        });
+    </script>
+</body>
+</html> 
