@@ -1,15 +1,19 @@
 import streamlit as st
-from dotenv import load_dotenv
+import os
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-import os
-import base64
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Check for API key
+if not os.getenv("OPENAI_API_KEY"):
+    st.error("Error: OPENAI_API_KEY not found in environment variables.")
+    st.stop()
 
 # Initialize session state
 if "conversation" not in st.session_state:
@@ -31,45 +35,35 @@ This assistant can help answer questions about physiotherapy based on the provid
 The RAG index is pre-created and loaded from the repository.
 """)
 
-# Function to download the index files
-def download_index_files():
-    """Download the index files from the repository"""
-    try:
-        # Check if the index exists
-        if not os.path.exists("faiss_index"):
-            st.info("Downloading index files...")
-            # In a real deployment, you would download from a secure location
-            # For now, we'll just check if the files exist
-            if not os.path.exists("faiss_index/index.faiss") or not os.path.exists("faiss_index/index.pkl"):
-                st.error("Index files not found. Please contact the administrator.")
-                return False
-        return True
-    except Exception as e:
-        st.error(f"Error downloading index files: {str(e)}")
-        return False
+# Check for index
+if not os.path.exists("chroma_index"):
+    st.error("""
+    Index not found. Please create the index first by running the create_index.py script.
+    
+    Instructions:
+    1. Create a 'pdfs' directory if it doesn't exist
+    2. Add PDF files to the 'pdfs' directory
+    3. Run the create_index.py script to create the index
+    4. After successful creation of the index, update this page
+    """)
+    st.stop()
 
 # Initialize the conversation chain
 def initialize_chain():
-    # Check if the index exists
-    if not os.path.exists("faiss_index"):
-        raise FileNotFoundError("FAISS index not found. Please contact the administrator.")
-        
     # Load the FAISS index
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        encode_kwargs={'normalize_embeddings': True}
+        model_kwargs={'device': 'cpu'}
     )
-    vectorstore = FAISS.load_local(
-        "faiss_index", 
-        embeddings,
-        allow_dangerous_deserialization=True
+    vectorstore = Chroma(
+        persist_directory="chroma_index",
+        embedding_function=embeddings
     )
     
     # Initialize the language model
     llm = ChatOpenAI(
-        temperature=0,
-        model_name="gpt-3.5-turbo-16k",
-        streaming=True
+        temperature=0.7,
+        model_name="gpt-3.5-turbo"
     )
     
     # Initialize memory
@@ -94,15 +88,8 @@ def initialize_chain():
 # Initialize the chain if not already done
 if st.session_state.conversation is None:
     try:
-        # First check if we can download the index files
-        if download_index_files():
-            st.session_state.conversation = initialize_chain()
-            st.success("Successfully loaded the RAG index!")
-        else:
-            st.error("Failed to initialize the conversation chain.")
-    except FileNotFoundError as e:
-        st.error(str(e))
-        st.info("Please contact the administrator to set up the index files.")
+        st.session_state.conversation = initialize_chain()
+        st.success("Successfully loaded the RAG index!")
     except Exception as e:
         st.error(f"Error initializing the conversation chain: {str(e)}")
         st.info("Please check your OpenAI API key and make sure all dependencies are installed correctly.")
@@ -113,26 +100,27 @@ if st.session_state.conversation is not None:
     user_question = st.text_input("Ask a question about physiotherapy:")
     
     if user_question:
-        try:
-            # Get the response
-            response = st.session_state.conversation({"question": user_question})
-            
-            # Display the chat history
-            for i, message in enumerate(st.session_state.chat_history):
-                if i % 2 == 0:
-                    st.write(f"👤 You: {message}")
-                else:
-                    st.write(f"🤖 Assistant: {message}")
-            
-            # Add the new messages to chat history
-            st.session_state.chat_history.append(user_question)
-            st.session_state.chat_history.append(response["answer"])
-            
-            # Display the latest response
-            st.write(f"👤 You: {user_question}")
-            st.write(f"🤖 Assistant: {response['answer']}")
-        except Exception as e:
-            st.error(f"Error getting response: {str(e)}")
+        with st.spinner("Searching for answer..."):
+            try:
+                # Get the response
+                response = st.session_state.conversation({"question": user_question})
+                
+                # Display the chat history
+                for i, message in enumerate(st.session_state.chat_history):
+                    if i % 2 == 0:
+                        st.write(f"👤 You: {message}")
+                    else:
+                        st.write(f"🤖 Assistant: {message}")
+                
+                # Add the new messages to chat history
+                st.session_state.chat_history.append(user_question)
+                st.session_state.chat_history.append(response["answer"])
+                
+                # Display the latest response
+                st.write(f"👤 You: {user_question}")
+                st.write(f"🤖 Assistant: {response['answer']}")
+            except Exception as e:
+                st.error(f"Error getting response: {str(e)}")
 
 # FAQ Section
 st.sidebar.header("Frequently Asked Questions")
