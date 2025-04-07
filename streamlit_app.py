@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
+import torch
 
 # Load environment variables
 load_dotenv()
@@ -48,22 +49,45 @@ if not os.path.exists("chroma_index"):
     """)
     st.stop()
 
+@st.cache_resource
+def get_embeddings():
+    """Cached function to create embeddings"""
+    try:
+        return HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'},
+            cache_folder="./model_cache"
+        )
+    except Exception as e:
+        st.error(f"Error initializing model: {str(e)}")
+        return None
+
+@st.cache_resource
+def get_vectorstore(embeddings):
+    """Cached function to create vector store"""
+    try:
+        return Chroma(
+            persist_directory="chroma_index",
+            embedding_function=embeddings
+        )
+    except Exception as e:
+        st.error(f"Error loading vector store: {str(e)}")
+        return None
+
 # Initialize the conversation chain
-def initialize_chain():
-    # Load the Chroma index
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'}
-    )
-    vectorstore = Chroma(
-        persist_directory="chroma_index",
-        embedding_function=embeddings
-    )
+try:
+    embeddings = get_embeddings()
+    if embeddings is None:
+        st.stop()
+    
+    vectorstore = get_vectorstore(embeddings)
+    if vectorstore is None:
+        st.stop()
     
     # Initialize the language model
     llm = ChatOpenAI(
-        temperature=0.7,
-        model_name="gpt-3.5-turbo"
+        model_name="gpt-3.5-turbo",
+        temperature=0.7
     )
     
     # Initialize memory
@@ -83,16 +107,12 @@ def initialize_chain():
         verbose=True
     )
     
-    return conversation_chain
-
-# Initialize the chain if not already done
-if st.session_state.conversation is None:
-    try:
-        st.session_state.conversation = initialize_chain()
-        st.success("Successfully loaded the RAG index!")
-    except Exception as e:
-        st.error(f"Error initializing the conversation chain: {str(e)}")
-        st.info("Please check your OpenAI API key and make sure all dependencies are installed correctly.")
+    st.session_state.conversation = conversation_chain
+    st.success("Successfully loaded the RAG index!")
+    
+except Exception as e:
+    st.error(f"Error initializing: {str(e)}")
+    st.stop()
 
 # Chat interface
 if st.session_state.conversation is not None:
