@@ -52,16 +52,16 @@ if "chat_history" not in st.session_state:
 
 # Page config
 st.set_page_config(
-    page_title="Physiotherapy Assistant",
-    page_icon="🏥",
+    page_title="RAG Chat Assistant",
+    page_icon="🤖",
     layout="wide"
 )
 
 # Title and description
-st.title("Physiotherapy Assistant")
+st.title("RAG Chat Assistant")
 st.markdown("""
-This assistant can help answer questions about physiotherapy based on the provided documentation.
-The RAG index is pre-created and loaded from the repository.
+This assistant uses RAG (Retrieval-Augmented Generation) to provide accurate answers based on the indexed documents.
+The index is pre-created and loaded from the repository.
 """)
 
 # Check for index
@@ -128,7 +128,7 @@ except Exception as e:
 # Chat interface
 if st.session_state.conversation is not None:
     # Chat input
-    user_question = st.text_input("Ask your question about physiotherapy:")
+    user_question = st.text_input("Ask your question:")
     
     if user_question:
         with st.spinner("Searching for answer..."):
@@ -179,7 +179,7 @@ for question, answer in faqs.items():
 st.sidebar.markdown("---")
 st.sidebar.markdown("### About")
 st.sidebar.markdown("""
-This application uses RAG (Retrieval-Augmented Generation) to provide accurate answers based on physiotherapy documentation.
+This application uses RAG (Retrieval-Augmented Generation) to provide accurate answers based on the indexed documents.
 The index is pre-created and updated periodically.
 """)
 
