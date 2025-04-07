@@ -5,7 +5,9 @@ langchain-huggingface>=0.1.2
 langchain-core>=0.3.15
 pypdf==3.17.1
 python-dotenv==1.0.0
-faiss-cpu==1.7.4
+faiss-cpu==1.7.4; platform_system!="Windows"
+faiss-cpu==1.7.4; platform_system=="Windows" and python_version<"3.12"
+faiss-cpu==1.7.4; platform_system=="Windows" and python_version>="3.12" and platform_machine=="AMD64"
 sentence-transformers>=2.6.0
 streamlit==1.29.0
 openai>=1.6.1,<2.0.0 
