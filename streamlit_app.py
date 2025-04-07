@@ -12,9 +12,13 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
-# Check for API key
+# Check for required environment variables
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("Error: OPENAI_API_KEY not found in environment variables.")
+    st.error("Please set the OPENAI_API_KEY environment variable")
+    st.stop()
+
+if not os.getenv("HUGGINGFACE_API_KEY"):
+    st.error("Please set the HUGGINGFACE_API_KEY environment variable")
     st.stop()
 
 # Create model cache directory
@@ -54,80 +58,61 @@ if not os.path.exists("chroma_index"):
     """)
     st.stop()
 
-@st.cache_resource
-def get_embeddings():
-    """Cached function to create embeddings"""
-    try:
-        return HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            cache_folder=str(cache_dir),
-            encode_kwargs={'normalize_embeddings': True}
-        )
-    except Exception as e:
-        st.error(f"Error initializing model: {str(e)}")
-        return None
+# Initialize the language model
+llm = ChatOpenAI(
+    model_name="gpt-3.5-turbo",
+    temperature=0.7,
+    openai_api_key=os.getenv("OPENAI_API_KEY")
+)
 
-@st.cache_resource
-def get_vectorstore(embeddings):
-    """Cached function to create vector store"""
-    try:
-        return Chroma(
-            persist_directory="chroma_index",
-            embedding_function=embeddings
-        )
-    except Exception as e:
-        st.error(f"Error loading vector store: {str(e)}")
-        return None
+# Initialize embeddings with Hugging Face token
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={'device': 'cpu'},
+    encode_kwargs={'normalize_embeddings': True},
+    huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),
+    cache_folder=str(cache_dir)
+)
+
+# Initialize the vector store
+try:
+    vectorstore = Chroma(
+        persist_directory="chroma_index",
+        embedding_function=embeddings
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+except Exception as e:
+    st.error(f"Error loading the vector store: {str(e)}")
+    st.stop()
+
+# Initialize memory
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
 
 # Initialize the conversation chain
 try:
-    with st.spinner("Загрузка модели..."):
-        embeddings = get_embeddings()
-        if embeddings is None:
-            st.stop()
-        
-        vectorstore = get_vectorstore(embeddings)
-        if vectorstore is None:
-            st.stop()
-        
-        # Initialize the language model
-        llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
-            temperature=0.7
-        )
-        
-        # Initialize memory
-        memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        
-        # Create the conversation chain
-        conversation_chain = ConversationalRetrievalChain.from_llm(
+    with st.spinner("Loading model..."):
+        qa_chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
-            retriever=vectorstore.as_retriever(
-                search_type="similarity",
-                search_kwargs={"k": 3}
-            ),
+            retriever=retriever,
             memory=memory,
             verbose=True
         )
-        
-        st.session_state.conversation = conversation_chain
-        st.success("Модель успешно загружена!")
-        
+        st.session_state.conversation = qa_chain
+        st.success("Model loaded successfully!")
 except Exception as e:
-    st.error(f"Ошибка при инициализации: {str(e)}")
+    st.error(f"Error initializing the conversation chain: {str(e)}")
     st.stop()
 
 # Chat interface
 if st.session_state.conversation is not None:
     # Chat input
-    user_question = st.text_input("Задайте ваш вопрос о физиотерапии:")
+    user_question = st.text_input("Ask your question about physiotherapy:")
     
     if user_question:
-        with st.spinner("Ищу ответ..."):
+        with st.spinner("Searching for answer..."):
             try:
                 # Get the response
                 response = st.session_state.conversation({"question": user_question})
@@ -140,20 +125,21 @@ if st.session_state.conversation is not None:
                         st.write(f"🤖 Assistant: {message}")
                 
                 # Add the new messages to chat history
-                st.session_state.chat_history.append((user_question, response["answer"]))
+                st.session_state.chat_history.append(user_question)
+                st.session_state.chat_history.append(response["answer"])
                 
                 # Display the latest response
                 st.write(f"👤 You: {user_question}")
                 st.write(f"🤖 Assistant: {response['answer']}")
             except Exception as e:
-                st.error(f"Произошла ошибка при обработке вопроса: {str(e)}")
+                st.error(f"Error processing your question: {str(e)}")
 
-# Отображение истории чата
+# Display chat history
 if st.session_state.chat_history:
-    st.subheader("История разговора")
-    for question, answer in st.session_state.chat_history:
-        st.write(f"Вопрос: {question}")
-        st.write(f"Ответ: {answer}")
+    st.subheader("Chat History")
+    for question, answer in zip(st.session_state.chat_history[::2], st.session_state.chat_history[1::2]):
+        st.write(f"Q: {question}")
+        st.write(f"A: {answer}")
         st.write("---")
 
 # FAQ Section
