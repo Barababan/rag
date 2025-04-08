@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir \
     python-multipart==0.0.9 \
     jinja2==3.1.3 \
     python-dotenv==1.0.1 \
+    pydantic>=2.5.0 \
     langchain==0.1.9 \
     langchain-openai==0.0.8 \
     langchain-community==0.0.27 \
