@@ -31,15 +31,15 @@ RUN pip install --no-cache-dir \
     pypdf>=3.17.1 \
     tiktoken>=0.6.0
 
-# Install ML dependencies
-RUN pip install --no-cache-dir \
-    sentence-transformers>=2.6.0 \
-    tokenizers>=0.19.1 \
-    transformers>=4.38.2 \
-    torch>=2.2.0 \
-    accelerate>=0.27.2 \
-    bitsandbytes>=0.42.0 \
-    langchain-huggingface>=0.0.1
+# Install ML dependencies with optimizations
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir \
+    sentence-transformers==2.2.2 \
+    tokenizers==0.13.3 \
+    transformers==4.30.2 \
+    accelerate==0.27.2 \
+    bitsandbytes==0.42.0 \
+    langchain-huggingface==0.0.1
 
 # Final stage
 FROM python:3.10-slim
